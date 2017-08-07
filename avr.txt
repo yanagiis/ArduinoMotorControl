@@ -1,0 +1,19 @@
+[binaries]
+c = 'avr-gcc'
+ar = 'avr-ar'
+strip = 'avr-strip'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'x86_64'
+cpu = 'x64'
+endian = 'little'
+
+[target_machine]
+system = 'bare-metel'
+cpu_family = 'avr'
+cpu = 'avr'
+endian = 'little'
+
+[properties]
+c_args = ['-D__AVR_ATmega328P__']
