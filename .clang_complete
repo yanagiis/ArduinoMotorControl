@@ -1,0 +1,6 @@
+-DF_CPU=16000000L
+-D__AVR_ATmega328P__
+-I/usr/avr/include
+-I./src
+-I./src/atmega328p
+-Os

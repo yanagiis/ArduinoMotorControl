@@ -1,0 +1,1 @@
+option('board', type: 'string', value: 'arduino pro mini')
