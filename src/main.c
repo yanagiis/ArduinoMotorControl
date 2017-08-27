@@ -84,8 +84,8 @@ int main(void)
     }
 #endif
 
-// wait command from uart
-    uart_puts("Start\r\n");
+    // wait command from uart
+    uart_puts("Extruder start\r\n");
 
     for (;;) {
         char uart_buffer[UART_COMMAND_BUFFER_SIZE];
@@ -95,14 +95,14 @@ int main(void)
         }
 
         if (uart_buffer[0] == 0) {
-            uart_puts("OK\n");
+            uart_puts("ok\n");
             continue;
         }
 
         struct HCode hcode;
         hcode_init(&hcode);
         if (!parse_hcode(uart_buffer, len, &hcode)) {
-            uart_puts("Error\n");
+            uart_puts("error\n");
             continue;
         }
 
@@ -112,9 +112,9 @@ int main(void)
             case HCODE_TYPE_H:
                 if (hcode_to_step_command(&hcode, cmd)) {
                     step_command_buffer_put(&step_command_buffer, cmd);
-                    uart_puts("OK\n");
+                    uart_puts("ok\n");
                 } else {
-                    uart_puts("Error\n");
+                    uart_puts("error\n");
                 }
                 break;
             case HCODE_TYPE_M:
