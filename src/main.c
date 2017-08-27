@@ -10,6 +10,8 @@
 #include <util/delay.h>
 #include <stddef.h>
 
+#define WATER_PER_CYCLE (0.0027475)
+
 static void board_init(void)
 {
     uart_init(UART_BAUD_SELECT(57600, F_CPU));
@@ -36,7 +38,8 @@ static bool hcode_to_step_command(struct HCode *hcode, struct StepCommand *cmd)
 {
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         if (hcode->e[i].available) {
-            uint32_t ml_to_count = (uint32_t)hcode->e[i].water_ml;
+            uint32_t ml_to_count =
+                (uint32_t)(hcode->e[i].water_ml / WATER_PER_CYCLE);
             cmd[i].step_count = ml_to_count << 1;
             cmd[i].interval_tick =
                 time_s_to_tick(hcode->time_second) / ml_to_count;
@@ -49,10 +52,10 @@ int main(void)
 {
     struct StepCommandBuffer step_command_buffer;
     struct Motor motors[NUM_MOTOR] = {
-        {GPIO_INIT(GPIO_PORT_D, 2), GPIO_INIT(GPIO_PORT_D, 3),
+        {GPIO_INIT(GPIO_PORT_D, 3), GPIO_INIT(GPIO_PORT_D, 2),
          GPIO_INIT(GPIO_PORT_D, 4)},
-        {GPIO_INIT(GPIO_PORT_D, 2), GPIO_INIT(GPIO_PORT_D, 5),
-         GPIO_INIT(GPIO_PORT_D, 6)},
+        {GPIO_INIT(GPIO_PORT_D, 3), GPIO_INIT(GPIO_PORT_D, 6),
+         GPIO_INIT(GPIO_PORT_B, 0)},
     };
 
     board_init();
@@ -61,6 +64,7 @@ int main(void)
     step_command_buffer_init(&step_command_buffer);
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         motor_init(&motors[i]);
+        motor_dir(&motors[i], MOTOR_DIR_CLOCKWISE);
     }
 
     step_tick_init(motors, &step_command_buffer);
