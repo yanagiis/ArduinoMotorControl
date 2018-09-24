@@ -7,6 +7,14 @@
 #include "config.h"
 
 enum HCodeType { HCODE_TYPE_H = 0, HCODE_TYPE_M };
+enum ParseError {
+    PARSE_ERROR_OK = 0,
+    PARSE_ERROR_NO_E,
+    PARSE_ERROR_NO_T,
+    PARSE_ERROR_NO_S,
+    PARSE_ERROR_INVALID_ARG,
+    PARSE_ERROR_WRONG_CHECKSUM
+};
 
 struct HCode {
     enum HCodeType type;
@@ -18,6 +26,6 @@ struct HCode {
 };
 
 void hcode_init(struct HCode *hcode);
-bool parse_hcode(char buf[], uint8_t len, struct HCode *cmd);
+enum ParseError parse_hcode(char buf[], uint8_t len, struct HCode *cmd);
 
 #endif  // HCODE_H

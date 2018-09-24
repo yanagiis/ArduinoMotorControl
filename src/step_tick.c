@@ -2,20 +2,21 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "timer.h"
 #include "motor.h"
-#include "step_tick.h"
 #include "pt/pt.h"
+#include "step_tick.h"
+#include "timer.h"
 
 struct StepState {
     uint32_t step_count;
     uint32_t interval_tick;
+    bool drive;
 };
 
 struct StepTickStack {
     struct pt pt;
     struct StepCommandBuffer *buffer;
-    struct StepCommand *current_command;
+    struct StepCommand current_command[NUM_MOTOR];
     struct Motor motors[NUM_MOTOR];
     // init in ptthread
     struct StepState state[NUM_MOTOR];
@@ -30,7 +31,6 @@ void step_tick_init(struct Motor motors[], struct StepCommandBuffer *buf)
 {
     PT_INIT(&stack.pt);
     stack.buffer = buf;
-    stack.current_command = NULL;
     memcpy(stack.motors, motors, sizeof(stack.motors));
     timer_reg_cb(step_tick_cb, (void *)&stack);
 }
@@ -45,8 +45,7 @@ static PT_THREAD(step_tick_pt(struct StepTickStack *s))
 {
     PT_BEGIN(&s->pt);
     for (;;) {
-        s->current_command = step_command_buffer_get(s->buffer);
-        if (s->current_command == NULL) {
+        if (step_command_buffer_get(s->buffer, s->current_command) != true) {
             disable_all_motors(s->motors, NUM_MOTOR);
             PT_YIELD(&s->pt);
             continue;
@@ -55,6 +54,7 @@ static PT_THREAD(step_tick_pt(struct StepTickStack *s))
         for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
             s->state[i].step_count = s->current_command[i].step_count;
             s->state[i].interval_tick = s->current_command[i].interval_tick;
+            s->state[i].drive = s->current_command[i].drive;
         }
         enable_all_motors(s->motors, NUM_MOTOR);
 
@@ -77,7 +77,9 @@ static PT_THREAD(step_tick_pt(struct StepTickStack *s))
                     s->state[i].interval_tick =
                         s->current_command[i].interval_tick;
                     s->state[i].step_count--;
-                    motor_step(&s->motors[i]);
+                    if (s->state[i].drive == 1) {
+                        motor_step(&s->motors[i]);
+                    }
                 } else {
                     s->state[i].interval_tick--;
                 }
@@ -105,5 +107,5 @@ static void enable_all_motors(struct Motor motors[], uint8_t num)
 
 uint32_t time_s_to_tick(float sec)
 {
-    return (uint32_t) (sec * 1000000) / TICK_US;
+    return ((uint32_t) (sec * 1000000) / TICK_US);
 }

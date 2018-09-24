@@ -1,16 +1,16 @@
+#include <stddef.h>
+#include <util/delay.h>
 #include "config.h"
 #include "gpio.h"
 #include "hcode.h"
 #include "motor.h"
+#include "stdio.h"
 #include "step_command.h"
 #include "step_tick.h"
 #include "timer.h"
 #include "uart.h"
-#include "stdio.h"
-#include <util/delay.h>
-#include <stddef.h>
 
-#define WATER_PER_CYCLE (0.0027475)
+#define WATER_PER_PULSE (0.0027475)
 
 static void board_init(void)
 {
@@ -26,23 +26,31 @@ static uint8_t uart_readline(char buf[], int size)
         for (c = uart_getc(); c == UART_NO_DATA; c = uart_getc())
             ;
         buf[len] = (char)c;
-        if (c == '\r' || c == '\n') {
-            buf[len++] = 0;
+        if (c == '\r') {
+            buf[len] = 0;
+            len -= 1;
+        } else if (c == '\n') {
+            buf[len] = 0;
             break;
         }
     }
-    return len;
+    return len + 1;
 }
 
 static bool hcode_to_step_command(struct HCode *hcode, struct StepCommand *cmd)
 {
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         if (hcode->e[i].available) {
-            uint32_t ml_to_count =
-                (uint32_t)(hcode->e[i].water_ml / WATER_PER_CYCLE);
-            cmd[i].step_count = ml_to_count << 1;
-            cmd[i].interval_tick =
-                time_s_to_tick(hcode->time_second) / ml_to_count;
+            cmd[i].step_count =
+                (uint32_t)((hcode->e[i].water_ml / WATER_PER_PULSE) * 2);
+            if (cmd[i].step_count >= 2) {
+                cmd[i].interval_tick = time_s_to_tick(hcode->time_second) /
+                                       (cmd[i].step_count / 2);
+                cmd[i].drive = 1;
+            } else {
+                cmd[i].interval_tick = time_s_to_tick(hcode->time_second);
+                cmd[i].drive = 0;
+            }
         }
     }
     return true;
@@ -52,10 +60,10 @@ int main(void)
 {
     struct StepCommandBuffer step_command_buffer;
     struct Motor motors[NUM_MOTOR] = {
-        {GPIO_INIT(GPIO_PORT_D, 3), GPIO_INIT(GPIO_PORT_D, 2),
-         GPIO_INIT(GPIO_PORT_D, 4)},
-        {GPIO_INIT(GPIO_PORT_D, 3), GPIO_INIT(GPIO_PORT_D, 6),
-         GPIO_INIT(GPIO_PORT_B, 0)},
+        {GPIO_INIT(GPIO_PORT_D, 1), GPIO_INIT(GPIO_PORT_D, 4),
+         GPIO_INIT(GPIO_PORT_D, 5)},
+        {GPIO_INIT(GPIO_PORT_D, 1), GPIO_INIT(GPIO_PORT_D, 2),
+         GPIO_INIT(GPIO_PORT_D, 3)},
     };
 
     board_init();
@@ -72,37 +80,60 @@ int main(void)
     // enable timer interrupt
     timer_enable();
 
+
 #if 0
     struct StepCommand cmd[2];
-    cmd[0].interval_tick = 100;
-    cmd[0].step_count = 400;
-    cmd[1].interval_tick = 100;
-    cmd[1].step_count = 400;
-    step_command_buffer_put(&step_command_buffer, cmd);
     for (;;) {
-        _delay_ms(10);
+        step_command_init(cmd);
+        cmd[0].drive = true;
+        cmd[0].interval_tick = 15625;
+        cmd[0].step_count = 80000;
+        cmd[1].drive = false;
+        cmd[1].interval_tick = 100;
+        cmd[1].step_count = 800;
+
+        while (step_command_buffer_put(&step_command_buffer, cmd) != true)
+            ;
+
+        while (true);
     }
 #endif
 
-    // wait command from uart
-    uart_puts("Extruder start\r\n");
-
+    uart_puts("start\r\n");
     for (;;) {
         char uart_buffer[UART_COMMAND_BUFFER_SIZE];
         uint8_t len = uart_readline(uart_buffer, sizeof(uart_buffer));
+
         if (len == sizeof(uart_buffer) && uart_buffer[len - 1] != 0) {
             continue;
         }
 
         if (uart_buffer[0] == 0) {
-            uart_puts("ok\n");
+            uart_puts("ok\r\n");
             continue;
         }
 
         struct HCode hcode;
+        enum ParseError error;
         hcode_init(&hcode);
-        if (!parse_hcode(uart_buffer, len, &hcode)) {
-            uart_puts("error\n");
+        if ((error = parse_hcode(uart_buffer, len, &hcode)) != PARSE_ERROR_OK) {
+            switch (error) {
+                case PARSE_ERROR_NO_E:
+                    uart_puts("No E\r\n");
+                    break;
+                case PARSE_ERROR_NO_T:
+                    uart_puts("No T\r\n");
+                    break;
+                case PARSE_ERROR_NO_S:
+                    uart_puts("No S\r\n");
+                    break;
+                case PARSE_ERROR_INVALID_ARG:
+                    uart_puts("Invalid args\r\n");
+                    break;
+                case PARSE_ERROR_WRONG_CHECKSUM:
+                    uart_puts("Invalid checksum\r\n");
+                    break;
+            }
             continue;
         }
 
@@ -111,16 +142,17 @@ int main(void)
         switch (hcode.type) {
             case HCODE_TYPE_H:
                 if (hcode_to_step_command(&hcode, cmd)) {
-                    step_command_buffer_put(&step_command_buffer, cmd);
-                    uart_puts("ok\n");
+                    while (step_command_buffer_put(&step_command_buffer, cmd) !=
+                           true)
+                        ;
+                    uart_puts("ok\r\n");
                 } else {
-                    uart_puts("error\n");
+                    uart_puts("hcode to step error\r\n");
                 }
                 break;
             case HCODE_TYPE_M:
                 break;
         }
-        _delay_ms(1000);
     }
 
     return 0;

@@ -1,16 +1,17 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
+#include <string.h>
 
 #include "hcode.h"
 #include "uart.h"
 
-static bool parse_htype(char buf[], uint8_t len, struct HCode *cmd);
-static bool parse_mtype(char buf[], uint8_t len, struct HCode *cmd);
-static bool get_field_value(char buf[],
+static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd);
+static enum ParseError parse_mtype(char buf[], uint8_t len, struct HCode *cmd);
+static bool get_field_hex(char buf[], uint8_t len, const char *field, int *i);
+static bool get_field_float(char buf[],
                             uint8_t len,
                             const char *field,
                             float *v);
@@ -25,7 +26,7 @@ void hcode_init(struct HCode *hcode)
     }
 }
 
-bool parse_hcode(char buf[], uint8_t len, struct HCode *cmd)
+enum ParseError parse_hcode(char buf[], uint8_t len, struct HCode *cmd)
 {
     switch (buf[0]) {
         case 'H':
@@ -39,41 +40,73 @@ bool parse_hcode(char buf[], uint8_t len, struct HCode *cmd)
     }
 }
 
-static bool parse_htype(char buf[], uint8_t len, struct HCode *cmd)
+static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd)
 {
     float value = 0;
+    int calc_checksum = 0;
+    int cmd_checksum = 0;
     char field[3] = "E?";
-
     bool at_least_one_e = false;
+
+    if (!get_field_hex(buf, len, "S", &cmd_checksum)) {
+        return PARSE_ERROR_NO_S;
+    }
+
+    for (uint8_t i = 0; i < len; ++i) {
+        if (buf[i] == 'S') {
+            break;
+        }
+        calc_checksum += buf[i];
+    }
+
+    if (calc_checksum != cmd_checksum) {
+        return PARSE_ERROR_WRONG_CHECKSUM;
+    }
+
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         field[1] = i + '0';
-        if (get_field_value(buf, len, field, &value)) {
+        if (get_field_float(buf, len, field, &value)) {
             cmd->e[i].available = true;
             cmd->e[i].water_ml = value;
             at_least_one_e = true;
         }
     }
 
-    if (!at_least_one_e) {
-        uart_puts("No E\r\n");
-        return false;
-    }
-
-    if (!get_field_value(buf, len, "T", &value)) {
-        uart_puts("No T\r\n");
-        return false;
+    if (!get_field_float(buf, len, "T", &value)) {
+        return PARSE_ERROR_NO_T;
     }
 
     cmd->time_second = value;
-    return true;
+    return PARSE_ERROR_OK;
 }
 
-static bool parse_mtype(char buf[], uint8_t len, struct HCode *cmd)
+static enum ParseError parse_mtype(char buf[], uint8_t len, struct HCode *cmd)
 {
+    return PARSE_ERROR_OK;
+}
+
+static bool get_field_hex(char buf[], uint8_t len, const char *field, int *i)
+{
+    const char *buf_end = buf + len;
+    const char *pos = find_str(buf, buf_end, field);
+    if (pos == NULL) {
+        return false;
+    }
+
+    const char *begin = pos + strlen(field);
+    if (begin >= buf_end) {
+        return false;
+    }
+
+    char *end;
+    *i = strtol(begin, &end, 16);
+    if (begin == end) {
+        return false;
+    }
     return true;
 }
 
-static bool get_field_value(char buf[],
+static bool get_field_float(char buf[],
                             uint8_t len,
                             const char *field,
                             float *v)
