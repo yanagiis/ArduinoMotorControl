@@ -16,7 +16,7 @@ void timer_init(void)
     TCCR0A &= ~(_BV(COM0A1) | _BV(COM0A0));
     TCCR0A |= _BV(WGM01);
     TIMSK0 |= _BV(OCIE0A);
-    OCR0A = 0x7;
+    OCR0A = 0xF;
     ENABLE_INTERRUPT();
 }
 

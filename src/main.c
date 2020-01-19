@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <util/delay.h>
+
 #include "config.h"
 #include "gpio.h"
 #include "hcode.h"
@@ -10,7 +11,7 @@
 #include "timer.h"
 #include "uart.h"
 
-#define WATER_PER_PULSE (0.0027475)
+float water_per_pulse[NUM_MOTOR] = {0.0027475, 0.0027475};
 
 static void board_init(void)
 {
@@ -42,7 +43,7 @@ static bool hcode_to_step_command(struct HCode *hcode, struct StepCommand *cmd)
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         if (hcode->e[i].available) {
             cmd[i].step_count =
-                (uint32_t)((hcode->e[i].water_ml / WATER_PER_PULSE) * 2);
+                (uint32_t)((hcode->e[i].water_ml / water_per_pulse[i]) * 2);
             if (cmd[i].step_count >= 2) {
                 cmd[i].interval_tick = time_s_to_tick(hcode->time_second) /
                                        (cmd[i].step_count / 2);
@@ -72,14 +73,15 @@ int main(void)
     step_command_buffer_init(&step_command_buffer);
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         motor_init(&motors[i]);
-        motor_dir(&motors[i], MOTOR_DIR_CLOCKWISE);
     }
+
+    motor_dir(&motors[0], MOTOR_DIR_COUNTER_CLOCKWISE);
+    motor_dir(&motors[1], MOTOR_DIR_CLOCKWISE);
 
     step_tick_init(motors, &step_command_buffer);
 
     // enable timer interrupt
     timer_enable();
-
 
 #if 0
     struct StepCommand cmd[2];
@@ -133,6 +135,8 @@ int main(void)
                 case PARSE_ERROR_WRONG_CHECKSUM:
                     uart_puts("Invalid checksum\r\n");
                     break;
+                default:
+                    break;
             }
             continue;
         }
@@ -151,6 +155,10 @@ int main(void)
                 }
                 break;
             case HCODE_TYPE_M:
+                for (int i = 0; i < NUM_MOTOR; ++i) {
+                    water_per_pulse[i] = hcode.e[i].water_ml;
+                }
+                uart_puts("ok\r\n");
                 break;
         }
     }

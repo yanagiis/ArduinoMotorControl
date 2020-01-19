@@ -1,3 +1,5 @@
+#include "hcode.h"
+
 #include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -5,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "hcode.h"
 #include "uart.h"
 
 static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd);
@@ -40,14 +41,10 @@ enum ParseError parse_hcode(char buf[], uint8_t len, struct HCode *cmd)
     }
 }
 
-static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd)
+static enum ParseError verify_checksum(char buf[], uint8_t len)
 {
-    float value = 0;
     int calc_checksum = 0;
     int cmd_checksum = 0;
-    char field[3] = "E?";
-    bool at_least_one_e = false;
-
     if (!get_field_hex(buf, len, "S", &cmd_checksum)) {
         return PARSE_ERROR_NO_S;
     }
@@ -62,6 +59,20 @@ static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd)
     if (calc_checksum != cmd_checksum) {
         return PARSE_ERROR_WRONG_CHECKSUM;
     }
+
+    return PARSE_ERROR_OK;
+}
+
+static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd)
+{
+    enum ParseError err = verify_checksum(buf, len);
+    if (err != PARSE_ERROR_OK) {
+        return err;
+    }
+
+    float value = 0;
+    char field[3] = "E?";
+    bool at_least_one_e = false;
 
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         field[1] = i + '0';
@@ -82,6 +93,22 @@ static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd)
 
 static enum ParseError parse_mtype(char buf[], uint8_t len, struct HCode *cmd)
 {
+    enum ParseError err = verify_checksum(buf, len);
+    if (err != PARSE_ERROR_OK) {
+        return err;
+    }
+
+    float value = 0;
+    char field[3] = "E?";
+
+    for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
+        field[1] = i + '0';
+        if (get_field_float(buf, len, field, &value)) {
+            cmd->e[i].available = true;
+            cmd->e[i].water_ml = value;
+        }
+    }
+
     return PARSE_ERROR_OK;
 }
 
