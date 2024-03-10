@@ -46,7 +46,7 @@ static PT_THREAD(step_tick_pt(struct StepTickStack *s))
     PT_BEGIN(&s->pt);
     for (;;) {
         if (step_command_buffer_get(s->buffer, s->current_command) != true) {
-            disable_all_motors(s->motors, NUM_MOTOR);
+            // disable_all_motors(s->motors, NUM_MOTOR);
             PT_YIELD(&s->pt);
             continue;
         }
