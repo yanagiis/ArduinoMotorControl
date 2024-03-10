@@ -61,10 +61,16 @@ int main(void)
 {
     struct StepCommandBuffer step_command_buffer;
     struct Motor motors[NUM_MOTOR] = {
-        {GPIO_INIT(GPIO_PORT_D, 1), GPIO_INIT(GPIO_PORT_D, 4),
-         GPIO_INIT(GPIO_PORT_D, 5)},
-        {GPIO_INIT(GPIO_PORT_D, 1), GPIO_INIT(GPIO_PORT_D, 2),
-         GPIO_INIT(GPIO_PORT_D, 3)},
+        {
+            .enable = GPIO_INIT(GPIO_PORT_B, 0),
+            .dir = GPIO_INIT(GPIO_PORT_D, 3),
+            .step = GPIO_INIT(GPIO_PORT_D, 2),
+        },
+        {
+            .enable = GPIO_INIT(GPIO_PORT_B, 1),
+            .dir = GPIO_INIT(GPIO_PORT_D, 5),
+            .step = GPIO_INIT(GPIO_PORT_D, 4),
+        },
     };
 
     board_init();
@@ -76,7 +82,7 @@ int main(void)
     }
 
     motor_dir(&motors[0], MOTOR_DIR_COUNTER_CLOCKWISE);
-    motor_dir(&motors[1], MOTOR_DIR_CLOCKWISE);
+    motor_dir(&motors[1], MOTOR_DIR_COUNTER_CLOCKWISE);
 
     step_tick_init(motors, &step_command_buffer);
 
@@ -88,11 +94,11 @@ int main(void)
     for (;;) {
         step_command_init(cmd);
         cmd[0].drive = true;
-        cmd[0].interval_tick = 15625;
+        cmd[0].interval_tick = 1562;
         cmd[0].step_count = 80000;
-        cmd[1].drive = false;
-        cmd[1].interval_tick = 100;
-        cmd[1].step_count = 800;
+        cmd[1].drive = true;
+        cmd[1].interval_tick = 1562;
+        cmd[1].step_count = 80000;
 
         while (step_command_buffer_put(&step_command_buffer, cmd) != true)
             ;
