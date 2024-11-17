@@ -49,6 +49,7 @@ static bool hcode_to_step_command(struct HCode *hcode, struct StepCommand *cmd)
                                        (cmd[i].step_count / 2);
                 cmd[i].drive = 1;
             } else {
+                cmd[i].step_count = 0;
                 cmd[i].interval_tick = time_s_to_tick(hcode->time_second);
                 cmd[i].drive = 0;
             }
