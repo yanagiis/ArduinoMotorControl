@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define TICK_US 256
+#define TICK_US 128
 
 typedef void(timer_cb)(void *arg);
 
