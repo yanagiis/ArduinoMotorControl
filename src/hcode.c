@@ -45,6 +45,7 @@ static enum ParseError verify_checksum(char buf[], uint8_t len)
 {
     int calc_checksum = 0;
     int cmd_checksum = 0;
+
     if (!get_field_hex(buf, len, "S", &cmd_checksum)) {
         return PARSE_ERROR_NO_S;
     }
@@ -72,14 +73,12 @@ static enum ParseError parse_htype(char buf[], uint8_t len, struct HCode *cmd)
 
     float value = 0;
     char field[3] = "E?";
-    bool at_least_one_e = false;
 
     for (uint8_t i = 0; i < NUM_MOTOR; ++i) {
         field[1] = i + '0';
         if (get_field_float(buf, len, field, &value)) {
             cmd->e[i].available = true;
             cmd->e[i].water_ml = value;
-            at_least_one_e = true;
         }
     }
 
